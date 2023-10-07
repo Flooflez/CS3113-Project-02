@@ -48,46 +48,55 @@ const char V_SHADER_PATH[] = "shaders/vertex_textured.glsl",
 F_SHADER_PATH[] = "shaders/fragment_textured.glsl";
 
 const float MILLISECONDS_IN_SECOND = 1000.0;
-const float DEGREES_PER_SECOND = 90.0f;
 
 const int NUMBER_OF_TEXTURES = 1; // to be generated, that is
 const GLint LEVEL_OF_DETAIL = 0;  // base image level; Level n is the nth mipmap reduction image
 const GLint TEXTURE_BORDER = 0;   // this value MUST be zero
 
 const char PADDLE_SPRITE_PATH[] = "assets\\paddle.png",
-BACKGROUND_SPRITE_PATH[] = "assets\\background.png";
+BACKGROUND_SPRITE_PATH[] = "assets\\background.png",
+P1_WIN_BANNER_SPRITE_PATH[] = "assets\\p1_winner_banner.png",
+P2_WIN_BANNER_SPRITE_PATH[] = "assets\\p2_winner_banner.png";
+const glm::vec3 BG_SCALE_VECTOR = glm::vec3(10.0f, 10.0f, 1.0f);
+const glm::vec3 PADDLE_SCALE_VECTOR = glm::vec3(1.5f, 1.5f, 1.0f);
+const glm::vec3 BANNER_START_POS = glm::vec3(0.0f, 10.0f, 0.0f);
+
+const float PADDLE_SPEED = 5.0f,
+BALL_SPEED = 1.0f,
+BANNER_STOP_THRESHOLD = 0.1f,
+BANNER_SPEED = 2.0f;
 
 SDL_Window* g_display_window;
 bool g_game_is_running = true;
 
 bool g_2_player_mode = true;
+bool g_game_over = false;
+int g_winner = 0; //0 = P1, 1 = P2
 
 
 ShaderProgram g_shader_program;
 glm::mat4 view_matrix, g_projection_matrix;
 
-glm::mat4 g_bg_model_matrix, g_paddle_1_model_matrix, g_paddle_2_model_matrix, g_ball_model_matrix;
+glm::mat4 g_bg_model_matrix, g_paddle_1_model_matrix, g_paddle_2_model_matrix, g_ball_model_matrix, g_banner_model_matrix;
 
 float g_previous_ticks = 0.0f;
 
 GLuint g_bg_texture_id, g_paddle_texture_id;
+GLuint g_banner_texture_ids[2];
+
+
 
 //position vectors
 glm::vec3 g_player_1_position = glm::vec3(-4.5f, 0.0f, 0.0f),
-    g_player_2_position = glm::vec3(4.5f, 0.0f, 0.0f);
+    g_player_2_position = glm::vec3(4.5f, 0.0f, 0.0f),
+    g_banner_position = BANNER_START_POS;
 
 //movement vectors
 glm::vec3 g_player_1_movement = glm::vec3(0.0f, 0.0f, 0.0f),
     g_player_2_movement = glm::vec3(0.0f, 0.0f, 0.0f);
 
-glm::vec3 g_bg_scale_vector = glm::vec3(10.0f, 10.0f, 1.0f);
-glm::vec3 g_paddle_scale_vector = glm::vec3(1.5f, 1.5f, 1.0f);
-
-float g_paddle_speed = 5.0f, g_ball_speed = 1.0f;
-
-float g_paddle_2_dir = 1.0f;
-
-float g_paddle_y_bounds = 3.0f;
+float g_paddle_2_dir = 1.0f, 
+    g_paddle_y_bounds = 3.0f;
 
 
 float get_screen_to_ortho(float coordinate, Coordinate axis)
@@ -169,9 +178,14 @@ void initialise()
 
     g_paddle_texture_id = load_texture(PADDLE_SPRITE_PATH);
     g_bg_texture_id = load_texture(BACKGROUND_SPRITE_PATH);
+    g_banner_texture_ids[0] = load_texture(P1_WIN_BANNER_SPRITE_PATH);
+    g_banner_texture_ids[1] = load_texture(P2_WIN_BANNER_SPRITE_PATH);
 
     //Setup Static Background
-    g_bg_model_matrix = glm::scale(g_bg_model_matrix, g_bg_scale_vector);
+    g_bg_model_matrix = glm::scale(g_bg_model_matrix, BG_SCALE_VECTOR);
+
+    g_banner_model_matrix = glm::translate(g_banner_model_matrix, BANNER_START_POS);
+    g_banner_model_matrix = glm::scale(g_banner_model_matrix, BG_SCALE_VECTOR);
 
     // enable blending
     glEnable(GL_BLEND);
@@ -211,63 +225,66 @@ void process_input()
 
     const Uint8* key_states = SDL_GetKeyboardState(NULL); // array of key states [0, 0, 1, 0, 0, ...]
 
-
-    if (key_states[SDL_SCANCODE_W])
-    {
-        if (g_player_1_position.y >= g_paddle_y_bounds) {
-            g_player_1_movement.y = 0.0f;
-        }
-        else {
-            g_player_1_movement.y = 1.0f;
-        }
-        
-    }
-    else if (key_states[SDL_SCANCODE_S])
-    {
-        if (g_player_1_position.y <= -g_paddle_y_bounds) {
-            g_player_1_movement.y = 0.0f;
-        }
-        else {
-            g_player_1_movement.y = -1.0f;
-        }
-        
-    }
-
-    if (g_2_player_mode) {
-        if (key_states[SDL_SCANCODE_UP])
+    if (!g_game_over) {
+        if (key_states[SDL_SCANCODE_W])
         {
+            if (g_player_1_position.y >= g_paddle_y_bounds) {
+                g_player_1_movement.y = 0.0f;
+            }
+            else {
+                g_player_1_movement.y = 1.0f;
+            }
+
+        }
+        else if (key_states[SDL_SCANCODE_S])
+        {
+            if (g_player_1_position.y <= -g_paddle_y_bounds) {
+                g_player_1_movement.y = 0.0f;
+            }
+            else {
+                g_player_1_movement.y = -1.0f;
+            }
+
+        }
+
+        if (g_2_player_mode) {
+            if (key_states[SDL_SCANCODE_UP])
+            {
+                if (g_player_2_position.y >= g_paddle_y_bounds) {
+                    g_player_2_movement.y = 0.0f;
+                }
+                else {
+                    g_player_2_movement.y = 1.0f;
+                }
+            }
+            else if (key_states[SDL_SCANCODE_DOWN])
+            {
+                if (g_player_2_position.y <= -g_paddle_y_bounds) {
+                    g_player_2_movement.y = 0.0f;
+                }
+                else {
+                    g_player_2_movement.y = -1.0f;
+                }
+            }
+        }
+        else {
             if (g_player_2_position.y >= g_paddle_y_bounds) {
-                g_player_2_movement.y = 0.0f;
+                g_paddle_2_dir = -1.0f;
             }
-            else {
-                g_player_2_movement.y = 1.0f;
+            else if (g_player_2_position.y <= -g_paddle_y_bounds) {
+                g_paddle_2_dir = 1.0f;
             }
-        }
-        else if (key_states[SDL_SCANCODE_DOWN])
-        {
-            if (g_player_2_position.y <= -g_paddle_y_bounds) {
-                g_player_2_movement.y = 0.0f;
-            }
-            else {
-                g_player_2_movement.y = -1.0f;
-            }
-        }
-    }
-    else {
-        if (g_player_2_position.y >= g_paddle_y_bounds) {
-            g_paddle_2_dir = -1.0f;
-        }
-        else if (g_player_2_position.y <= -g_paddle_y_bounds) {
-            g_paddle_2_dir = 1.0f;
+
+            /* I wanted to use this cuz its so clean but there's a bug when you hold T
+            if (fabs(g_player_2_position.y) >= fabs(g_paddle_y_bounds)) {
+                g_paddle_2_dir *= -1.0f;
+            }*/
+            g_player_2_movement.y = g_paddle_2_dir;
         }
 
-        /* I wanted to use this cuz its so clean but there's a bug when you hold T
-        if (fabs(g_player_2_position.y) >= fabs(g_paddle_y_bounds)) {
-            g_paddle_2_dir *= -1.0f;
-        }*/
-        g_player_2_movement.y = g_paddle_2_dir;
     }
 
+    
 
     //not normalising since one 1D movement
 }
@@ -279,22 +296,33 @@ void update()
     g_previous_ticks = ticks;
 
     // Add             direction       * elapsed time * units per second
-    g_player_1_position += g_player_1_movement * delta_time * g_paddle_speed;
-    g_player_2_position += g_player_2_movement * delta_time * g_paddle_speed;
+    g_player_1_position += g_player_1_movement * delta_time * PADDLE_SPEED;
+    g_player_2_position += g_player_2_movement * delta_time * PADDLE_SPEED;
 
     //reset
     g_paddle_1_model_matrix = glm::mat4(1.0f);
     g_paddle_2_model_matrix = glm::mat4(1.0f);
+    
 
     float y_pos = g_player_1_position.y;
     
     g_paddle_1_model_matrix = glm::translate(g_paddle_1_model_matrix, g_player_1_position);
-    g_paddle_1_model_matrix = glm::scale(g_paddle_1_model_matrix, g_paddle_scale_vector);
+    g_paddle_1_model_matrix = glm::scale(g_paddle_1_model_matrix, PADDLE_SCALE_VECTOR);
 
     g_paddle_2_model_matrix = glm::translate(g_paddle_2_model_matrix, g_player_2_position);
     g_paddle_2_model_matrix = glm::rotate(g_paddle_2_model_matrix, glm::radians(180.0f) ,glm::vec3(0.0f, 0.0f, 1.0f));
-    g_paddle_2_model_matrix = glm::scale(g_paddle_2_model_matrix, g_paddle_scale_vector);
+    g_paddle_2_model_matrix = glm::scale(g_paddle_2_model_matrix, PADDLE_SCALE_VECTOR);
     
+    
+
+    if (g_game_over) {
+        // reset
+        g_banner_model_matrix = glm::mat4(1.0f);
+
+        if (g_banner_position.y >= BANNER_STOP_THRESHOLD) g_banner_position.y -= g_banner_position.y * delta_time * BANNER_SPEED;
+        g_banner_model_matrix = glm::translate(g_banner_model_matrix, g_banner_position);
+        g_banner_model_matrix = glm::scale(g_banner_model_matrix, BG_SCALE_VECTOR);
+    }
 }
 
 void draw_object(glm::mat4& object_model_matrix, GLuint& object_texture_id)
@@ -330,6 +358,8 @@ void render() {
 
     draw_object(g_paddle_1_model_matrix, g_paddle_texture_id);
     draw_object(g_paddle_2_model_matrix, g_paddle_texture_id);
+
+    draw_object(g_banner_model_matrix, g_banner_texture_ids[g_winner]);
 
     // We disable two attribute arrays now
     glDisableVertexAttribArray(g_shader_program.get_position_attribute());
