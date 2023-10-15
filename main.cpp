@@ -65,12 +65,13 @@ const glm::vec3 BALL_SCALE_VECTOR = glm::vec3(0.7f, 0.7f, 1.0f);
 const glm::vec3 BANNER_START_POS = glm::vec3(0.0f, 10.0f, 0.0f);
 
 const float PADDLE_SPEED = 5.0f,
-        BALL_SPEED = 2.0f,
-        BALL_ROT_SPEED = 0.5f,
+        BALL_SPEED = 3.0f,
+        BALL_ROT_SPEED = 1.0f,
         BANNER_STOP_THRESHOLD = 0.1f,
         BANNER_SPEED = 2.0f,
         COLLISION_THRESHOLD = 0.4f,
-        SCREEN_BORDER_THRESHOLD = 3.5f;
+        SCREEN_BORDER_THRESHOLD = 3.5f,
+        X_WIN_THRESHOLD = 5.5f;
 
 SDL_Window* g_display_window;
 bool g_game_is_running = true;
@@ -162,13 +163,22 @@ void update_ball_velocity() {
     x_speed = ((float)rand() / RAND_MAX) * range + offset;
     float y_speed = glm::sqrt(BALL_SPEED * BALL_SPEED - x_speed * x_speed);
 
+    if (g_ball_velocity.y < 0) {
+        y_speed = -y_speed;
+    }
+
+
     if (g_prev_collided == 1) {
-        g_ball_velocity = glm::vec3(x_speed, -y_speed, 0.0f);
+        g_ball_velocity = glm::vec3(x_speed, y_speed, 0.0f);
     }
     else{
         g_ball_velocity = glm::vec3(-x_speed, y_speed, 0.0f);
     }
-    
+}
+
+void end_game(int winner) {
+    g_game_over = true;
+    g_winner = winner;
 }
 
 void initialise()
@@ -325,7 +335,17 @@ void process_input()
 
 void update()
 {
-    
+    if (g_ball_position.x > X_WIN_THRESHOLD) {
+        //p1 win
+        end_game(0);
+    }
+    else if (g_ball_position.x < -X_WIN_THRESHOLD) {
+        //p2 win
+        end_game(1);
+    }
+
+
+
     // player 1 detection
     float x_distance_1 = fabs(g_ball_position.x - g_player_1_position.x) - (((BALL_SCALE_VECTOR.x + PADDLE_SCALE_VECTOR.x) * COLLISION_THRESHOLD) / 2.0f);
     float y_distance_1 = fabs(g_ball_position.y - g_player_1_position.y) - (((BALL_SCALE_VECTOR.y + PADDLE_SCALE_VECTOR.y) * COLLISION_THRESHOLD) / 2.0f);
@@ -375,7 +395,7 @@ void update()
     g_paddle_2_model_matrix = glm::rotate(g_paddle_2_model_matrix, glm::radians(180.0f) ,glm::vec3(0.0f, 0.0f, 1.0f));
     g_paddle_2_model_matrix = glm::scale(g_paddle_2_model_matrix, PADDLE_SCALE_VECTOR);
     
-    g_curr_ball_rotation += BALL_ROT_SPEED * g_ball_rotation_direction;
+    g_curr_ball_rotation += BALL_ROT_SPEED * g_ball_rotation_direction * delta_time;
     g_ball_position += g_ball_velocity * delta_time;
 
     if (g_ball_position.y > SCREEN_BORDER_THRESHOLD) {
