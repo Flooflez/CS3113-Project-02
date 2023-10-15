@@ -65,8 +65,7 @@ const glm::vec3 BALL_SCALE_VECTOR = glm::vec3(0.7f, 0.7f, 1.0f);
 const glm::vec3 BANNER_START_POS = glm::vec3(0.0f, 10.0f, 0.0f);
 
 const float PADDLE_SPEED = 5.0f,
-        BALL_SPEED = 3.0f,
-        BALL_ROT_SPEED = 1.0f,
+        BALL_MAX_SPEED = 5.5f,
         BANNER_STOP_THRESHOLD = 0.1f,
         BANNER_SPEED = 2.0f,
         COLLISION_THRESHOLD = 0.4f,
@@ -81,7 +80,7 @@ bool g_game_over = false;
 int g_winner = 0; //0 = P1, 1 = P2
 int g_ball_rotation_direction = -1; //1 clockwise, -1 anticlockwise
 
-float g_curr_ball_rotation = 0.0f;
+float g_curr_ball_rotation = 0.0f, g_ball_speed = 3.0f, g_ball_rot_speed = 1.0f;
 int g_prev_collided = 0, g_prev_bounce = 0;
 
 
@@ -101,7 +100,7 @@ glm::vec3 g_player_1_position = glm::vec3(-4.5f, 0.0f, 0.0f),
         g_player_2_position = glm::vec3(4.5f, 0.0f, 0.0f),
         g_banner_position = BANNER_START_POS,
         g_ball_position = glm::vec3(0.0f, 0.0f, 0.0f),
-        g_ball_velocity = glm::vec3(-BALL_SPEED, 0.0f, 0.0f);
+        g_ball_velocity = glm::vec3(-g_ball_speed, 0.0f, 0.0f);
 
 //movement vectors
 glm::vec3 g_player_1_movement = glm::vec3(0.0f, 0.0f, 0.0f),
@@ -154,14 +153,14 @@ GLuint load_texture(const char* filepath)
 
 void update_ball_velocity() {
     float x_speed;
-    float min_x = BALL_SPEED * 0.5;
-    float max_x = BALL_SPEED * 0.8;
+    float min_x = g_ball_speed * 0.5;
+    float max_x = g_ball_speed * 0.8;
 
     float range = max_x - min_x;
     float offset = min_x;
 
     x_speed = ((float)rand() / RAND_MAX) * range + offset;
-    float y_speed = glm::sqrt(BALL_SPEED * BALL_SPEED - x_speed * x_speed);
+    float y_speed = glm::sqrt(g_ball_speed * g_ball_speed - x_speed * x_speed);
 
     if (g_ball_velocity.y < 0) {
         y_speed = -y_speed;
@@ -356,6 +355,10 @@ void update()
             g_prev_collided = 1;
             g_prev_bounce = 0;
             update_ball_velocity();
+            if (g_ball_speed < BALL_MAX_SPEED) {
+                g_ball_speed += 0.1;
+                g_ball_rot_speed += 0.1;
+            }
         }
     }
 
@@ -369,6 +372,10 @@ void update()
             g_prev_collided = 2;
             g_prev_bounce = 0;
             update_ball_velocity();
+            if (g_ball_speed < BALL_MAX_SPEED) {
+                g_ball_speed += 0.1;
+                g_ball_rot_speed += 0.1;
+            }
         }
     }
 
@@ -395,7 +402,7 @@ void update()
     g_paddle_2_model_matrix = glm::rotate(g_paddle_2_model_matrix, glm::radians(180.0f) ,glm::vec3(0.0f, 0.0f, 1.0f));
     g_paddle_2_model_matrix = glm::scale(g_paddle_2_model_matrix, PADDLE_SCALE_VECTOR);
     
-    g_curr_ball_rotation += BALL_ROT_SPEED * g_ball_rotation_direction * delta_time;
+    g_curr_ball_rotation += g_ball_rot_speed * g_ball_rotation_direction * delta_time;
     g_ball_position += g_ball_velocity * delta_time;
 
     if (g_ball_position.y > SCREEN_BORDER_THRESHOLD) {
