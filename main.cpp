@@ -1,7 +1,7 @@
 /**
 * Author: Maximilian Ta
 * Assignment: Pong Clone
-* Date due: 2023-10-14, 11:59pm
+* Date due: 2023-10-21, 11:59pm
 * I pledge that I have completed this assignment without
 * collaborating with anyone else, in conformance with the
 * NYU School of Engineering Policies and Procedures on
